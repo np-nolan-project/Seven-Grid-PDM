@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>PMP PDM Expert Engine Pro</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <style>
+        /* CSS Variables for consistent branding and dark mode aesthetics */
+        /* CSS 变量：用于保持品牌色彩一致性和深色模式美感 */
+        :root { 
+            --error: #ef4444;    
+            --success: #10b981;  
+            --primary: #3b82f6;  
+            --bg: #0f172a;       
+            --text-main: #ffffff; 
+            --card-bg: #1e293b;
+        }
+        
+        /* Global Reset and Layout Styles */
+        /* 全局样式重置与布局样式 */
+        body { font-family: 'JetBrains Mono', 'PingFang SC', monospace; margin: 0; background: var(--bg); color: #f8fafc; height: 100vh; overflow: hidden; }
+        .layout { display: grid; grid-template-columns: 450px 1fr; height: 100vh; width: 100vw; overflow: hidden; }
+        
+        /* Sidebar Styling: Flexbox used to pin footer at bottom */
+        /* 侧边栏样式：使用 Flexbox 将底部固定 */
+        .sidebar { 
+            background: #1e293b; 
+            display: flex; 
+            flex-direction: column; 
+            height: 100vh; 
+            border-right: 1px solid #334155; 
+        }
+        .sidebar-scroll { flex: 1; overflow-y: auto; padding: 20px; }
+        .sidebar-footer { padding: 15px 20px; border-top: 1px solid #334155; background: #1e293b; }
+
+        /* Card and Log UI Components */
+        /* 卡片与日志 UI 组件 */
+        .card { background: #334155; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #475569; position: relative; }
+        .error-log { background: #1e293b; border: 1px solid #475569; padding: 12px; border-radius: 6px; font-size: 13px; margin-top: 10px; border-left: 4px solid var(--primary); }
+
+        /* Modal / Dialog Overlay Styles */
+        /* 弹窗 / 对话框遮罩样式 */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background: var(--card-bg); padding: 25px; border-radius: 12px; width: 600px; border: 1px solid #475569; position: relative; }
+        .modal-textarea { width: 100%; height: 300px; background: #0f172a; color: #10b981; border: 1px solid #475569; border-radius: 4px; font-family: monospace; padding: 10px; box-sizing: border-box; resize: none; margin-bottom: 15px; }
+
+        /* Grid Editor for Early/Late Start/Finish values */
+        /* 用于输入 ES/EF/LS/LF 等数值的网格编辑器 */
+        .grid-editor { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-top: 8px; }
+        .grid-editor input { background: #0f172a; border: 1px solid #475569; color: #fff; padding: 4px; text-align: center; font-size: 12px; width: 100%; box-sizing: border-box; border-radius: 4px; }
+        .grid-label { font-size: 10px; color: var(--text-main); text-align: center; font-weight: bold; }
+
+        /* Canvas and Drawing Area Styles */
+        /* 画布与绘图区域样式 */
+        .canvas-area { position: relative; overflow: auto; background-image: radial-gradient(#334155 1px, transparent 1px); background-size: 25px 25px; }
+        svg { min-width: 2500px; min-height: 2000px; }
+        
+        /* Node and Link (Edge) SVG Styles */
+        /* SVG 节点与连线样式 */
+        .node-group rect { fill: #1e293b; stroke: #64748b; stroke-width: 2; transition: all 0.3s; }
+        .node-group.critical rect { stroke: var(--primary); stroke-width: 4; } 
+        .edge { stroke: #475569; stroke-width: 2; fill: none; marker-end: url(#arrow); transition: all 0.3s; }
+        .edge.critical { stroke: var(--primary); stroke-width: 3; } 
+        
+        /* Button Components */
+        /* 按钮组件样式 */
+        .btn { cursor: pointer; padding: 10px 16px; border-radius: 4px; border: none; font-weight: bold; transition: 0.2s; width: 100%; margin: 5px 0; }
+        .btn-add { background: var(--primary); color: white; }
+        .btn-data { background: #475569; color: white; }
+        .btn-ghost { background: transparent; color: white; border: 1px solid #475569; }
+        .btn-danger { color: #ef4444; background: none; border: none; font-size: 12px; cursor: pointer; }
+
+        /* Custom Scrollbar for sleek look */
+        /* 自定义滚动条，提升视觉质感 */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script>
+/**
+ * @section Translation Dictionary
+ * @description Stores all UI text for multi-language support (ZH/EN).
+ * 中英文翻译字典：存储所有界面文本。
+ */
+const { useState, useMemo, createElement: h } = React;
+
+const i18n = {
+    zh: {
+        title: "PDM 专家调度引擎 Pro",
+        addNode: "+ 新增活动节点",
+        node: "节点",
+        delete: "删除",
+        logicRel: "逻辑依赖关系 (FS)",
+        addRel: "+ 建立依赖关系",
+        diag: "项目监控:",
+        allClear: "逻辑闭合健康",
+        task: "任务",
+        dataPort: "数据导入/导出",
+        importBtn: "覆盖并应用数据",
+        copyBtn: "复制 JSON",
+        duration: "总工期",
+        invalidJson: "JSON 格式有误，无法解析。"
+    },
+    en: {
+        title: "PDM Expert Engine Pro",
+        addNode: "+ Add Activity",
+        node: "Node",
+        delete: "Delete",
+        logicRel: "Dependencies (FS)",
+        addRel: "+ Link Dependency",
+        diag: "Project Monitor:",
+        allClear: "Logic Healthy",
+        task: "Task",
+        dataPort: "Data I/O",
+        importBtn: "Overwrite & Apply",
+        copyBtn: "Copy JSON",
+        duration: "Duration",
+        invalidJson: "Invalid JSON."
+    }
+};
+
+/**
+ * @section Topological Layout Engine
+ * @description Automatically calculates X and Y coordinates based on logic dependencies.
+ * 拓扑布局引擎：根据逻辑依赖关系自动计算每个节点的坐标。
+ */
+const autoLayout = (nodes, relations) => {
+    if (!nodes || nodes.length === 0) return [];
+    const levels = {}; // Stores the horizontal rank of each node / 存储每个节点的水平层级
+    const adj = {};    // Adjacency list / 邻接表
+    const nodeIds = nodes.map(n => n.id);
+
+    // Initialize adjacency list / 初始化邻接表
+    nodes.forEach(n => { levels[n.id] = 0; adj[n.id] = []; });
+    relations.forEach(r => {
+        if (nodeIds.includes(r.from) && nodeIds.includes(r.to)) adj[r.from].push(r.to);
+    });
+
+    // BFS to determine node levels (Topological Sort principle)
+    // 广度优先搜索确定节点层级（拓扑排序原理）
+    const roots = nodes.filter(n => !relations.some(r => r.to === n.id && nodeIds.includes(r.from)));
+    let currentBatch = roots.map(n => n.id);
+    let level = 0;
+    while(currentBatch.length > 0 && level < 100) {
+        let nextBatch = [];
+        currentBatch.forEach(id => {
+            levels[id] = Math.max(levels[id] || 0, level);
+            if (adj[id]) nextBatch.push(...adj[id]);
+        });
+        currentBatch = [...new Set(nextBatch)];
+        level++;
+    }
+
+    // Assign final coordinates / 分配最终坐标
+    const rankCount = {};
+    return nodes.map(n => {
+        const r = levels[n.id] || 0;
+        rankCount[r] = (rankCount[r] || 0) + 1;
+        return { ...n, x: 50 + r * 280, y: 50 + (rankCount[r]-1) * 160 };
+    });
+};
+
+/**
+ * @section Main Application Component
+ * @description Core logic for state management, diagnostics, and UI rendering.
+ * 主应用组件：状态管理、逻辑诊断及 UI 渲染的核心逻辑。
+ */
+function App() {
+    const [lang, setLang] = useState('zh'); // Language state / 语言状态
+    const t = (key) => i18n[lang][key];     // Translation helper / 翻译辅助函数
+
+    const [activities, setActivities] = useState([]); // Task data / 任务数据
+    const [relations, setRelations] = useState([]);   // Link data / 连线数据
+    const [showModal, setShowModal] = useState(false); // Modal visibility / 弹窗可见性
+    const [tempData, setTempData] = useState("");      // Temp JSON string for I/O / 用于导入导出的临时 JSON 字符串
+
+    /**
+     * Handlers for Node property changes (Forward/Backward pass logic)
+     * 节点属性变更处理（包含前推与逆推计算逻辑）
+     */
+    const handleCellChange = (id, field, value) => {
+        const val = parseInt(value) || 0;
+        setActivities(prev => prev.map(a => {
+            if (a.id !== id) return a;
+            let updated = { ...a, [field]: val };
+            // PDM Formula logic / PDM 公式逻辑
+            if (field === 'es' || field === 'du') updated.ef = updated.es + updated.du;
+            else if (field === 'ef') updated.du = updated.ef - updated.es;
+            else if (field === 'lf' || field === 'du') updated.ls = updated.lf - updated.du;
+            else if (field === 'ls') updated.du = updated.lf - updated.ls;
+            updated.tf = updated.lf - updated.ef; // Total Float / 总时差
+            return updated;
+        }));
+    };
+
+    /**
+     * Diagnostic Logic: Validates project health and calculates CP duration
+     * 诊断逻辑：校验项目健康状况并计算关键路径工期
+     */
+    const stats = useMemo(() => {
+        const positioned = autoLayout(activities, relations);
+        const errors = [];
+        let maxEF = 0;
+        positioned.forEach(n => {
+            // Check mathematical consistency / 校验数学一致性
+            if (n.es + n.du !== n.ef) errors.push(`[${n.id}] ES+DU ≠ EF`);
+            if (n.lf - n.du !== n.ls) errors.push(`[${n.id}] LF-DU ≠ LS`);
+            if (n.ef > maxEF) maxEF = n.ef;
+        });
+        // Logic violation check (FS dependency) / 逻辑违反校验 (FS 依赖)
+        relations.forEach(r => {
+            const from = activities.find(a => a.id === r.from);
+            const to = activities.find(a => a.id === r.to);
+            if (from && to && from.ef > to.es) errors.push(`冲突: ${from.id}(EF:${from.ef}) > ${to.id}(ES:${to.es})`);
+        });
+        return { positioned, errors, maxEF };
+    }, [activities, relations, lang]);
+
+    /**
+     * Data Import Logic: Cleans and overwrites state
+     * 数据导入逻辑：清洗并覆盖状态
+     */
+    const handleImport = () => {
+        try {
+            const parsed = JSON.parse(tempData);
+            const validIds = (parsed.activities || []).map(a => a.id);
+            setActivities([...(parsed.activities || [])]);
+            setRelations((parsed.relations || []).filter(r => validIds.includes(r.from) && validIds.includes(r.to)));
+            setShowModal(false);
+        } catch (e) { alert(t('invalidJson')); }
+    };
+
+    return h('div', { className: 'layout' }, [
+        /**
+         * Left Sidebar: Controls and Activity List
+         * 左侧边栏：控制控件与任务列表
+         */
+        h('div', { className: 'sidebar' }, [
+            h('div', { className: 'sidebar-scroll' }, [
+                // Header & Language Switcher / 标题与语言切换
+                h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px'} }, [
+                    h('h2', { style: { margin: 0, fontSize: '18px' } }, t('title')),
+                    h('select', { value: lang, onChange: e => setLang(e.target.value), style: { background: '#0f172a', color: '#fff', border: '1px solid #475569', padding: '4px', borderRadius: '4px' } }, 
+                    [h('option', { value: 'zh' }, '中文'), h('option', { value: 'en' }, 'English')])
+                ]),
+                // Add Node Button / 新增节点按钮
+                h('button', { className: 'btn btn-add', onClick: () => {
+                    const nextChar = activities.length > 0 ? String.fromCharCode(activities[activities.length-1].id.charCodeAt(0) + 1) : 'A';
+                    const newId = /^[A-Z]$/.test(nextChar) ? nextChar : `T${activities.length}`;
+                    setActivities([...activities, { id: newId, name: `${t('task')} ${newId}`, es:0, du:1, ef:1, ls:0, lf:1, tf:0 }]);
+                }}, t('addNode')),
+                // Activity Cards List / 任务卡片列表
+                stats.positioned.map(node => h('div', { className: 'card', key: `node-${node.id}` }, [
+                    h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } }, [
+                        h('b', null, `${t('node')} ${node.id}`),
+                        h('button', { className: 'btn-danger', onClick: () => {
+                            setActivities(activities.filter(a => a.id !== node.id));
+                            setRelations(relations.filter(r => r.from !== node.id && r.to !== node.id));
+                        } }, t('delete'))
+                    ]),
+                    h('input', { style: { marginTop: '8px', background: 'transparent', border: 'none', borderBottom: '1px solid #475569', color: '#fff', width: '100%', padding: '4px 0' }, value: node.name, onChange: e => setActivities(activities.map(a => a.id === node.id ? {...a, name: e.target.value} : a)) }),
+                    // 6-Cell Grid Editor (ES, DU, EF, LS, TF, LF)
+                    h('div', { className: 'grid-editor' }, [['es', 'du', 'ef', 'ls', 'tf', 'lf'].map(f => h('div', { key: f }, [
+                        h('div', { className: 'grid-label' }, f.toUpperCase()),
+                        h('input', { type: 'number', value: node[f], onChange: e => handleCellChange(node.id, f, e.target.value) })
+                    ]))])
+                ])),
+                // Dependency Management / 依赖关系管理
+                h('h3', { style: { marginTop: '30px', borderTop: '1px solid #334155', paddingTop: '20px' } }, t('logicRel')),
+                h('button', { className: 'btn btn-ghost', onClick: () => {
+                    if (activities.length < 2) return;
+                    setRelations([...relations, { id: Date.now(), from: activities[0].id, to: activities[activities.length-1].id }]);
+                }}, t('addRel')),
+                relations.map(rel => h('div', { key: rel.id, style: {display: 'flex', gap: '8px', marginBottom: '8px', alignItems: 'center'} }, [
+                    h('select', { style: {flex:1, background: '#0f172a', color: '#fff', border: '1px solid #475569'}, value: rel.from, onChange: e => setRelations(relations.map(r => r.id === rel.id ? {...r, from: e.target.value} : r)) }, activities.map(a => h('option', {value: a.id}, a.id))),
+                    h('span', null, '→'),
+                    h('select', { style: {flex:1, background: '#0f172a', color: '#fff', border: '1px solid #475569'}, value: rel.to, onChange: e => setRelations(relations.map(r => r.id === rel.id ? {...r, to: e.target.value} : r)) }, activities.map(a => h('option', {value: a.id}, a.id))),
+                    h('button', { className: 'btn-danger', onClick: () => setRelations(relations.filter(r => r.id !== rel.id)) }, '×')
+                ])),
+                // Real-time Diagnostics Monitor / 实时诊断监控
+                h('div', { className: 'error-log' }, [
+                    h('div', { style: { fontWeight: 'bold', color: 'var(--primary)', marginBottom: '5px'} }, `${t('duration')}: ${stats.maxEF}`),
+                    h('b', null, t('diag')),
+                    stats.errors.length === 0 ? h('div', {style: {color: 'var(--success)', marginTop: '5px'}}, t('allClear')) : 
+                    stats.errors.map((err, i) => h('div', { key: i, style: {color: '#fca5a5', fontSize: '12px', marginTop: '2px'} }, err))
+                ])
+            ]),
+            // Sidebar Footer: Data I/O Button / 侧边栏底部：数据导入导出按钮
+            h('div', { className: 'sidebar-footer' }, [
+                h('button', { className: 'btn btn-data', onClick: () => {
+                    setTempData(JSON.stringify({ activities, relations }, null, 4));
+                    setShowModal(true);
+                }}, t('dataPort'))
+            ])
+        ]),
+
+        /**
+         * Right Canvas Area: SVG Visualizer
+         * 右侧画布区域：SVG 可视化器
+         */
+        h('div', { className: 'canvas-area' }, [
+            h('svg', null, [
+                // Marker definition for arrows / 箭头标记定义
+                h('defs', null, h('marker', { id: 'arrow', markerWidth: 10, markerHeight: 7, refX: 9, refY: 3.5, orient: 'auto' }, h('path', { d: 'M0,0 L10,3.5 L0,7 Z', fill: '#475569' }))),
+                // Render Relation Lines (Edges) / 渲染依赖连线
+                relations.map(rel => {
+                    const from = stats.positioned.find(n => n.id === rel.from);
+                    const to = stats.positioned.find(n => n.id === rel.to);
+                    if (!from || !to) return null;
+                    const isCritical = from.tf === 0 && to.tf === 0;
+                    return h('path', { key: `edge-${rel.id}`, className: `edge ${isCritical ? 'critical' : ''}`, d: `M ${from.x + 140} ${from.y + 45} L ${to.x} ${to.y + 45}` });
+                }),
+                // Render PDM Activity Nodes (Rectangles + Lines + Text) / 渲染 PDM 活动节点
+                stats.positioned.map(node => h('g', { key: `g-node-${node.id}`, transform: `translate(${node.x}, ${node.y})`, className: `node-group ${node.tf < 0 ? 'delayed' : (node.tf === 0 ? 'critical' : '')}` }, [
+                    h('rect', { width: 140, height: 90, rx: 8 }),
+                    h('line', { x1: 0, y1: 30, x2: 140, y2: 30, stroke: '#334155' }), h('line', { x1: 0, y1: 60, x2: 140, y2: 60, stroke: '#334155' }),
+                    h('line', { x1: 45, y1: 0, x2: 45, y2: 30, stroke: '#334155' }), h('line', { x1: 95, y1: 0, x2: 95, y2: 30, stroke: '#334155' }),
+                    h('line', { x1: 45, y1: 60, x2: 45, y2: 90, stroke: '#334155' }), h('line', { x1: 95, y1: 60, x2: 95, y2: 90, stroke: '#334155' }),
+                    // Numerical labels for the 6-cell node / 节点 6 格数值标签
+                    h('text', { x: 22, y: 20, textAnchor: 'middle', fill: '#fff', fontSize: '14' }, node.es),
+                    h('text', { x: 70, y: 20, textAnchor: 'middle', fill: 'var(--primary)', fontSize: '14', fontWeight: 'bold' }, node.du),
+                    h('text', { x: 118, y: 20, textAnchor: 'middle', fill: '#fff', fontSize: '14' }, node.ef),
+                    h('text', { x: 70, y: 50, textAnchor: 'middle', fill: '#fff', fontSize: '16', fontWeight: 'bold' }, node.name),
+                    h('text', { x: 22, y: 80, textAnchor: 'middle', fill: '#fff', fontSize: '14' }, node.ls),
+                    h('text', { x: 70, y: 80, textAnchor: 'middle', fill: node.tf < 0 ? 'var(--error)' : (node.tf === 0 ? 'var(--primary)' : '#cbd5e1'), fontSize: '12', fontWeight: 'bold' }, `TF:${node.tf}`),
+                    h('text', { x: 118, y: 80, textAnchor: 'middle', fill: '#fff', fontSize: '14' }, node.lf)
+                ]))
+            ])
+        ]),
+
+        /**
+         * Modal Section: JSON I/O with backdrop click-to-close
+         * 弹窗部分：带点击遮罩关闭功能的 JSON 导入导出
+         */
+        showModal && h('div', { 
+            className: 'modal-overlay', 
+            onClick: () => setShowModal(false) 
+        }, [
+            h('div', { 
+                className: 'modal-content', 
+                onClick: e => e.stopPropagation() 
+            }, [
+                h('h3', null, t('dataPort')),
+                h('textarea', { className: 'modal-textarea', value: tempData, onChange: e => setTempData(e.target.value) }),
+                h('div', { style: { display: 'flex', gap: '10px'} }, [
+                    h('button', { className: 'btn btn-add', onClick: handleImport }, t('importBtn')),
+                    h('button', { className: 'btn btn-ghost', onClick: () => { navigator.clipboard.writeText(tempData); alert('JSON Copied!'); } }, t('copyBtn'))
+                ])
+            ])
+        ])
+    ]);
+}
+
+// Bootstrapping the application / 启动应用
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(h(App));
+</script>
+</body>
+</html>
