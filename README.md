@@ -1,4 +1,4 @@
-# PMP PDM Expert Engine Pro - 专家级进度网络分析引擎
+# PDM Online - 七格图在线绘图工具
 
 这是一个专为 PMP（项目管理专业人士）设计的 **PDM（Precedence Diagramming Method，紧前关系绘图法）** 模拟与分析引擎。它能够自动处理复杂的项目逻辑，计算关键路径，并实时诊断逻辑冲突。
 
